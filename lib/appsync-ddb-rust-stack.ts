@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as appsync from "aws-cdk-lib/aws-appsync";
 import * as lambda from "aws-cdk-lib/aws-lambda";
+import { RustFunction } from 'cargo-lambda-cdk';
 
 import { Construct } from 'constructs';
 import * as path from 'path';
@@ -15,7 +16,7 @@ export class AppsyncDdbRustStack extends cdk.Stack {
 
     // Stage 1: deploy a DynamoDB table with sample data
     const table = new SampleDataTable(this, 'CustomerOrders', {
-      tableName: 'ddb-test-customer-orders',
+      tableName: 'CustomerOrders',
       dataFolderPath: path.join(__dirname, '../sample-data/'), // the path to the json files
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       partitionKey: {
@@ -29,9 +30,9 @@ export class AppsyncDdbRustStack extends cdk.Stack {
     }).table;
 
     // Stage 2: deploy an AppSync API with a Lambda resolvers
-    const api = new appsync.GraphqlApi(this, "API", {
+    const api = new appsync.GraphqlApi(this, "OrdersAPI", {
       name: "OrdersAPI",
-      schema: appsync.SchemaFile.fromAsset("schema/orders.graphql"),
+      definition: appsync.Definition.fromFile(path.join(__dirname, '../schema/orders.graphql')),
       authorizationConfig: {
         defaultAuthorization: {
           authorizationType: appsync.AuthorizationType.API_KEY,
@@ -44,25 +45,23 @@ export class AppsyncDdbRustStack extends cdk.Stack {
       },
     });
 
-    const allOrdersLambda = new lambda.Function(this, "allOrdersHandler", {
-      handler: "allOrders.handler",
-      runtime: lambda.Runtime.NODEJS_16_X,
-      code: lambda.Code.fromAsset("functions"),
+    const ordersLambda = new RustFunction(this, "ordersRustHandler", {
+      manifestPath: path.join(__dirname, "../functions/orders-lambda/Cargo.toml"),
       environment: {
         ORDERS_TABLE: table.tableName,
-      },
+      }
     });
 
-    table.grantReadData(allOrdersLambda);
+    table.grantReadData(ordersLambda);
 
-    const allOrdersDataSource = api.addLambdaDataSource(
-      "allOrdersDataSource",
-      allOrdersLambda,
+    const ordersDataSource = api.addLambdaDataSource(
+      "OrdersDataSource",
+      ordersLambda,
     );
 
-    allOrdersDataSource.createResolver("allOrders", {
+    ordersDataSource.createResolver("orders", {
       typeName: "Query",
-      fieldName: "allOrders",
+      fieldName: "orders",
     });
 
     new cdk.CfnOutput(this, "API_URL", {
