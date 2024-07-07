@@ -5,6 +5,10 @@ import { AppsyncDdbRustStack } from '../lib/appsync-ddb-rust-stack';
 
 const app = new cdk.App();
 new AppsyncDdbRustStack(app, 'AppsyncDdbRustStack', {
+  // For this test problem we'll not use environments
+
+
+
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
    * but a single synthesized template can be deployed anywhere. */

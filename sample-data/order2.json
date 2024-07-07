@@ -1,0 +1,5 @@
+{ "Item": { "PK": { "S": "ORDER#2" }, "SK": { "S": "META" }, "id": { "N": "2" }, "date": { "S": "2022-01-01 19:00:02" }, "totalAmount": { "N": "16.4" } } }
+{ "Item": { "PK": { "S": "ORDER#2" }, "SK": { "S": "CUSTOMER#1" }, "fullName": { "S": "John Smith" }, "email": { "S": "john@mycompany.com" } } }
+{ "Item": { "PK": { "S": "ORDER#2" }, "SK": { "S": "PRODUCT#7" }, "name": { "S": "Orange" }, "price": { "N": "1.5" }, "quantity": { "N": "4" } } }
+{ "Item": { "PK": { "S": "ORDER#2" }, "SK": { "S": "PRODUCT#9" }, "name": { "S": "Apple" }, "price": { "N": "0.9" }, "quantity": { "N": "6" } } }
+{ "Item": { "PK": { "S": "ORDER#2" }, "SK": { "S": "PRODUCT#10" }, "name": { "S": "Pineapple" }, "price": { "N": "2.5" }, "quantity": { "N": "2" } } }

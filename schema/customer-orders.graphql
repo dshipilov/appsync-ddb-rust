@@ -1,0 +1,54 @@
+# This schema defines the data model for the Customer-Order AppSync API
+
+type Customer {
+  email: String!
+  fullName: String!
+}
+
+type Product {
+    name: String!
+    price: Float!
+}
+
+type ProductQuantity {
+  product: Product!
+  quantity: Int!
+}
+
+type Order {
+  id: ID!
+  date: String!
+  totalAmount: Float!
+  customer: Customer!
+  products: [ProductQuantity]!
+}
+
+type Query {
+  allOrders: [Order]
+}
+
+schema {
+	query: Query
+}
+
+# Sample query:
+# query {
+#   orders {
+#     id
+#     date
+#     totalAmount
+
+#     customer {
+#       email
+#       fullName
+#     }
+    
+#     products {
+#       product {
+#        name  
+#        price
+#       }
+#       quantity
+#     }
+#   }
+# }

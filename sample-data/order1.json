@@ -1,0 +1,4 @@
+{ "Item": { "PK": { "S": "ORDER#1" }, "SK": { "S": "META" }, "id": { "N": "1" }, "date": { "S": "2022-01-01 13:01:12" }, "totalAmount": { "N": "3.4" } } }
+{ "Item": { "PK": { "S": "ORDER#1" }, "SK": { "S": "CUSTOMER#1" }, "fullName": { "S": "John Smith" }, "email": { "S": "john@mycompany.com" } } }
+{ "Item": { "PK": { "S": "ORDER#1" }, "SK": { "S": "PRODUCT#1" }, "name": { "S": "Milk" }, "price": { "N": "2.5" }, "quantity": { "N": "1" } } }
+{ "Item": { "PK": { "S": "ORDER#1" }, "SK": { "S": "PRODUCT#3" }, "name": { "S": "Banana" }, "price": { "N": "0.3" }, "quantity": { "N": "3" } } }
