@@ -45,6 +45,7 @@ export class AppsyncDdbRustStack extends cdk.Stack {
       },
     });
 
+    // Define the Lambda function for the orders resolver in Rust
     const ordersLambda = new RustFunction(this, "ordersRustHandler", {
       manifestPath: path.join(__dirname, "../functions/orders-lambda/Cargo.toml"),
       environment: {
@@ -64,17 +65,16 @@ export class AppsyncDdbRustStack extends cdk.Stack {
       fieldName: "orders",
     });
 
+    // Output some useful deployment parameters
     new cdk.CfnOutput(this, "API_URL", {
       value: api.graphqlUrl,
     });
-
     new cdk.CfnOutput(this, "API_Key", {
       value: api.apiKey || "",
     });
     new cdk.CfnOutput(this, "TableName", {
       value: table.tableName || "",
     });
-
     new cdk.CfnOutput(this, "TableARN", {
       value: table.tableArn || "",
     });
