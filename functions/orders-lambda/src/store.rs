@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
-use crate::tracing::info;
+use crate::tracing::{error, info};
 use aws_config::BehaviorVersion;
 use aws_sdk_dynamodb::{types::AttributeValue, Client};
 
 use crate::model::{Customer, Order, Product, ProductQuantity};
+use anyhow::{anyhow, Result};
 
 pub struct OrdersStore {
     table_name: String,
@@ -43,64 +44,108 @@ impl OrdersStore {
                 .fold(0.0, |acc, pq| acc + pq.product.price * pq.quantity)
         }
 
+        // Helper functions to extract values from the items
+        // Demonstrates how to handle errors with anyhow::Result and Result type combinators
+        fn get_attr_str(item: &OrdersItem, key: &str) -> Result<String> {
+            item.get(key)
+                .ok_or_else(|| anyhow!("Missing key: {}", key))?
+                .as_s()
+                .map_err(|_| anyhow!("Invalid value type for key: {}", key))
+                .map(|v| v.to_string())
+        }
+
+        // This function additionally needs to parse string to f64 as a final step
+        fn get_attr_num(item: &OrdersItem, key: &str) -> Result<f64> {
+            item.get(key)
+                .ok_or_else(|| anyhow!("Missing key: {}", key))?
+                .as_n()
+                .map_err(|_| anyhow!("Expected numeric value: {}", key))
+                .and_then(|v| {
+                    v.parse()
+                        .map_err(|_| anyhow!("Invalid numeric value: {}", key))
+                })
+        }
+
         // Initial scan through the data to build up the customers and products info
         // Orders are stored for later processing
-        for item in data.iter() {
-            let pk = item.get("PK").unwrap().as_s().unwrap().to_string();
-            let sk = item.get("SK").unwrap().as_s().unwrap().to_string();
+        // Actual code is wrapped into lambda which returns Result<> type to handle errors with ? operator
+        let items_processing_res: Result<()> = (|| {
+            for item in data.iter() {
+                let pk = get_attr_str(item, "PK")?;
+                let sk = get_attr_str(item, "SK")?;
 
-            if sk.starts_with("CUSTOMER#") {
-                // Customer item - we can build the Customer struct from it righ away
-                let customer = Customer {
-                    full_name: item.get("fullName").unwrap().as_s().unwrap().to_string(),
-                    email: item.get("email").unwrap().as_s().unwrap().to_string(),
-                };
-                customers.insert(pk.clone(), customer);
-            } else if sk.starts_with("PRODUCT#") {
-                // Product item - build Product and ProductQuantity structs and accumulate them for the orde PK
-                let product = Product {
-                    name: item.get("name").unwrap().as_s().unwrap().to_string(),
-                    price: item.get("price").unwrap().as_n().unwrap().parse().unwrap(),
-                };
-                let quantity = item
-                    .get("quantity")
-                    .unwrap()
-                    .as_n()
-                    .unwrap()
-                    .parse()
-                    .unwrap();
-                let product_quantity = ProductQuantity {
-                    product: product,
-                    quantity: quantity,
-                };
-                let product_quantities = products.entry(pk).or_insert(vec![]);
-                product_quantities.push(product_quantity);
-            } else if sk == "META" {
-                // Order item - store it in a raw form for later processing
-                orders.insert(pk.clone(), item);
+                match sk.split("#").next().unwrap() {
+                    // Get the first part of the SK
+                    "CUSTOMER" => {
+                        let customer = Customer {
+                            full_name: get_attr_str(item, "fullName")?,
+                            email: get_attr_str(item, "email")?,
+                        };
+                        customers.insert(pk.clone(), customer);
+                    }
+                    "PRODUCT" => {
+                        let product = Product {
+                            name: get_attr_str(item, "name")?,
+                            price: get_attr_num(item, "price")?,
+                        };
+                        let quantity = get_attr_num(item, "quantity")?;
+                        let product_quantity = ProductQuantity {
+                            product: product,
+                            quantity: quantity,
+                        };
+                        let product_quantities = products.entry(pk).or_insert(vec![]);
+                        product_quantities.push(product_quantity);
+                    }
+                    "META" => {
+                        orders.insert(pk.clone(), item);
+                    }
+                    _ => Err(anyhow!("Unknown item type: {}", sk))?,
+                }
             }
+            Ok(())
+        })();
+
+        // Break out early if there was an error processing the items
+        if let Err(e) = items_processing_res {
+            error!("Error processing items: {:?}", e);
+            return vec![];
         }
 
         // Go through the orders collection and build the final vector of Order structs
         orders
             .into_iter()
-            .map(|(order_id, order_item)| {
-                // We already have the customers and products info collected, so we are ready to build the Order struct
-                let customer = customers.get(&order_id).unwrap();
-                let product_quantities = products.get(&order_id).unwrap();
+            .filter_map(|(order_id, order_item)| {
+                // Attempt to construct the Order struct
+                // Using the same lambda pattern as before to handle errors
+                let result: Result<Order> = (|| {
+                    let customer = customers
+                        .get(&order_id)
+                        .ok_or_else(|| anyhow!("Customer not found"))?;
 
-                // Compute the total amount of the order from the products info
-                let total_amount = compute_total_amount(product_quantities);
+                    let product_quantities = products
+                        .get(&order_id)
+                        .ok_or_else(|| anyhow!("Product quantities not found"))?;
 
-                Order {
-                    id: order_item.get("id").unwrap().as_n().unwrap().to_string(),
-                    date: order_item.get("date").unwrap().as_s().unwrap().to_string(),
-                    total_amount: total_amount,
-                    customer: customer.clone(),
-                    products: product_quantities.clone(),
+                    let total_amount = compute_total_amount(product_quantities);
+
+                    Ok(Order {
+                        id: get_attr_str(order_item, "id")?,
+                        date: get_attr_str(order_item, "date")?,
+                        total_amount: total_amount,
+                        customer: customer.clone(),
+                        products: product_quantities.clone(),
+                    })
+                })();
+
+                match result {
+                    Ok(order) => Some(order),
+                    Err(e) => {
+                        error!("Error processing order {}: {:?}", order_id, e);
+                        None
+                    }
                 }
             })
-            .collect()
+            .collect::<Vec<Order>>()
     }
 }
 
